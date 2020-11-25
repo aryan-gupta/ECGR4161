@@ -15,10 +15,6 @@ Videos and code of each task is in each folder's PDF Report. They also have been
 
 *Note that the labs are listed in reverse order so the more difficult labs are at the top. 
 
-
-
-https://youtu.be/
-
 ## Videos
 ### Lab 10
 [![Lab 10](https://img.youtube.com/vi/U_KL2b4HmrU/0.jpg)](https://www.youtube.com/watch?v=U_KL2b4HmrU)
