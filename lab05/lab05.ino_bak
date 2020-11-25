@@ -1,0 +1,245 @@
+//============================================================================
+// File:  DriveSquare
+//
+// 2020-06-22 - James Conrad, from code borrowed from TI
+//    (some of this original code by Franklin S. Cooper Jr.)
+// Summary:
+//  This example will demonstrate the various features of the Encoder library.
+//  The robot will go forward by a specified amount in inches. A robot naturally
+//  will not go straight due to factors such as wheel wobble or differences in
+//  behavior of the left and right motor. Incorporating PID with the encoder count
+//
+//============================================================================
+
+#include "SimpleRSLK.h"
+
+#define WHEEL_DIAMETER 7.0   // Diameter of Romi wheels in cm
+#define CM_TO_TRAVEL 50      // How far in cm for the robot to travel
+#define TURN90DEGREE 10.9956 // cm to make a 90 degree turn
+
+#define WHEEL_DIAM 0.06959 // meters
+#define WHEEL_BASE 0.143 // meters
+#define CNT_PER_REV 360 // Number of encoder (rising) pulses every time the wheel turns completely
+#define WHEELSPEED 15        // Default raw pwm speed for motor.
+
+float calc_degrees_to_distance (float degrees) {
+	float wheel_base_circum = WHEEL_BASE * PI;
+	float angle_ratio = degrees / 360.0;
+	return angle_ratio * wheel_base_circum;
+}
+uint16_t calc_enoder_count (float distance) {
+	float wheel_circum = WHEEL_DIAM * PI;
+	float wheel_rotations = distance / wheel_circum;
+	// float motor_rotations = wheel_rotations * MOTOR_WHEEL_RATIO;
+	return uint16_t( wheel_rotations * CNT_PER_REV );
+}
+
+//============================================================================
+// The setup() funtion runs one time at the beginning of the Energia program
+//============================================================================
+void setup() {
+	Serial.begin(115200);
+	setupRSLK();                 // Set up all of the pins & functions needed to
+															 //   be used by the TI bot
+	setupWaitBtn(LP_LEFT_BTN);   // Left button on Launchpad
+	setupLed(RED_LED);           // Red LED of the RGB LED
+}
+
+//============================================================================
+// The loop() function runs after the setup() function completes in an
+// Energia program and will continue to run in a repeating loop until the
+// LaunchPad is reset or powered off
+//============================================================================
+
+void loop() {
+	uint16_t leftCount = 0, rightCount = 0, baseSpeed  = WHEELSPEED; // Total amount of encoder pulses received
+	uint16_t leftMotorSpeed = WHEELSPEED, rightMotorSpeed = WHEELSPEED;
+	uint16_t i = 0; //loop counter variable
+
+	// Amount of encoder pulses needed to achieve distance
+	uint16_t straight = calc_enoder_count(0.5);
+	uint16_t turn90 = calc_enoder_count(calc_degrees_to_distance(90));
+	uint16_t turn120 = calc_enoder_count(calc_degrees_to_distance(120));
+
+	String btnMsg = "Expected straight count: ";
+	btnMsg += straight;
+
+	btnMsg += ". Expected 90 count: ";
+	btnMsg += turn90;
+
+	btnMsg += ". Expected 120 count: ";
+	btnMsg += turn120;
+
+	// Wait until button is pressed to start robot
+	btnMsg += "\nPush left button on Launchpad to start demo.\n";
+
+	waitBtnPressed(LP_LEFT_BTN,btnMsg,RED_LED);          // Wait until button is pressed to start robot
+	delay(2000);
+
+	for(i=0; i<4; i++) {                                 // This will make the bot travel in a square
+		leftCount = 0, rightCount = 0; baseSpeed = WHEELSPEED;
+
+		// === DRIVE Straight ==========================
+		resetLeftEncoderCnt();  resetRightEncoderCnt();   // Set the encoder pulses count back to zero
+		setMotorDirection(BOTH_MOTORS,MOTOR_DIR_FORWARD); // Cause the robot to drive forward
+		enableMotor(BOTH_MOTORS);                         // "Turn on" the motor
+		setMotorSpeed(BOTH_MOTORS, baseSpeed);            // Set motor speed
+
+		while(leftCount < straight and rightCount < straight) {                    // Drive motor until it has received the
+			uint16_t avgCount = (leftCount + rightCount) / 2;
+			uint16_t lowSpeedCount = straight * 0.25;
+			if (avgCount < lowSpeedCount) {
+				baseSpeed = 8;
+			} else if (avgCount > (straight - lowSpeedCount)) {
+				baseSpeed = 8;
+			} else {
+				baseSpeed = WHEELSPEED;
+			}
+
+			Serial.print(leftCount);
+			Serial.print("\t");
+			Serial.print(rightCount);  //    straight for the desired distance
+			Serial.print("\t");
+
+			leftCount = getEncoderLeftCnt();              //    correct number of pulses to travel
+			rightCount = getEncoderRightCnt();
+
+			int abs_diff = abs(int(leftCount) - rightCount);
+			if (abs_diff > 10) {
+				int speed_inc = 5;
+
+				Serial.print("off_");
+
+				if (leftCount < rightCount) {
+					leftMotorSpeed = baseSpeed + speed_inc;
+					rightMotorSpeed = baseSpeed - speed_inc;
+					Serial.print("inc_left");
+				}
+
+				if (rightCount < leftCount) {
+					leftMotorSpeed = baseSpeed - speed_inc;
+					rightMotorSpeed = baseSpeed + speed_inc;
+					Serial.print("inc_right");
+				}
+
+				// Check bounds for under/overflow
+				// if (leftMotorSpeed <= speed_inc) {
+				// 	leftMotorSpeed = speed_inc;
+				// }
+
+				// if (rightMotorSpeed <= speed_inc) {
+				// 	rightMotorSpeed = speed_inc;
+				// }
+
+				// if (leftMotorSpeed >= 100) {
+				// 	leftMotorSpeed = 100;
+				// }
+
+				// if (rightMotorSpeed >= 100) {
+				// 	rightMotorSpeed = 100;
+				// }
+
+				Serial.print("\t");
+				Serial.print(leftMotorSpeed);
+				Serial.print("\t");
+				Serial.print(rightMotorSpeed);
+			} else {
+				leftMotorSpeed = baseSpeed;
+				rightMotorSpeed = baseSpeed;
+
+				Serial.print("in_sync");
+			}
+
+			setMotorSpeed(LEFT_MOTOR,leftMotorSpeed);
+			setMotorSpeed(RIGHT_MOTOR,rightMotorSpeed);
+
+			Serial.println();
+		}
+		disableMotor(BOTH_MOTORS);                        // Halt motors
+		leftCount = 0, rightCount = 0; baseSpeed = WHEELSPEED;
+		delay(1000);
+		//==============================================
+
+		// === DRIVE 90 degree turn CCW ================
+		resetLeftEncoderCnt();  resetRightEncoderCnt();    // Set the encoder pulses count back to zero
+		setMotorDirection(RIGHT_MOTOR,MOTOR_DIR_FORWARD);  // Cause the robot to drive 90 degrees CCW
+		setMotorDirection(LEFT_MOTOR,MOTOR_DIR_BACKWARD);  //   by setting the L motor and R motor CW
+		enableMotor(BOTH_MOTORS);                          // "Turn on" the motor
+		setMotorSpeed(BOTH_MOTORS, baseSpeed);             // Set motor speed
+		while(leftCount < turn90 and rightCount < turn90) {                         // Drive motor until it has received the
+
+			uint16_t avgCount = (leftCount + rightCount) / 2;
+			uint16_t lowSpeedCount = straight * 0.25;
+			if (avgCount < lowSpeedCount) {
+				baseSpeed = 6;
+			} else if (avgCount > (straight - lowSpeedCount)) {
+				baseSpeed = 6;
+			} else {
+				baseSpeed = WHEELSPEED;
+			}
+
+			Serial.print(leftCount);
+			Serial.print("\t");
+			Serial.print(rightCount);  //    straight for the desired distance
+			Serial.print("\t");
+
+			leftCount = getEncoderLeftCnt();              //    correct number of pulses to travel
+			rightCount = getEncoderRightCnt();
+
+			int abs_diff = abs(int(leftCount) - rightCount);
+			if (abs_diff > 10) {
+				int speed_inc = abs_diff / 2;
+
+				Serial.print("off_");
+
+				if (leftCount < rightCount) {
+					leftMotorSpeed = baseSpeed + speed_inc;
+					rightMotorSpeed = baseSpeed - speed_inc;
+					Serial.print("inc_left");
+				}
+
+				if (rightCount < leftCount) {
+					leftMotorSpeed = baseSpeed - speed_inc;
+					rightMotorSpeed = baseSpeed + speed_inc;
+					Serial.print("inc_right");
+				}
+
+				// Check bounds for under/overflow
+				// if (leftMotorSpeed <= speed_inc) {
+				// 	leftMotorSpeed = speed_inc;
+				// }
+
+				// if (rightMotorSpeed <= speed_inc) {
+				// 	rightMotorSpeed = speed_inc;
+				// }
+
+				// if (leftMotorSpeed >= 100) {
+				// 	leftMotorSpeed = 100;
+				// }
+
+				// if (rightMotorSpeed >= 100) {
+				// 	rightMotorSpeed = 100;
+				// }
+
+				Serial.print("\t");
+				Serial.print(leftMotorSpeed);
+				Serial.print("\t");
+				Serial.print(rightMotorSpeed);
+			} else {
+				leftMotorSpeed = baseSpeed;
+				rightMotorSpeed = baseSpeed;
+
+				Serial.print("in_sync");
+			}
+
+			setMotorSpeed(LEFT_MOTOR,leftMotorSpeed);
+			setMotorSpeed(RIGHT_MOTOR,rightMotorSpeed);
+
+			Serial.println();
+		}
+		disableMotor(BOTH_MOTORS);                        // Halt motors
+		leftCount = 0, rightCount = 0; baseSpeed = WHEELSPEED;
+		delay(1000);
+		//==============================================
+	}  //end of for loop
+}  //end of loop function

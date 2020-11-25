@@ -1,0 +1,102 @@
+//============================================================================
+// File:  DriveSquare
+//
+// 2020-06-22 - James Conrad, from code borrowed from TI
+//    (some of this original code by Franklin S. Cooper Jr.)
+// Summary:
+//  This example will demonstrate the various features of the Encoder library.
+//  The robot will go forward by a specified amount in inches. A robot naturally
+//  will not go straight due to factors such as wheel wobble or differences in
+//  behavior of the left and right motor. Incorporating PID with the encoder count
+//
+//============================================================================
+
+#include "SimpleRSLK.h"
+
+#define WHEEL_DIAMETER 7.0   // Diameter of Romi wheels in cm 
+#define CNT_PER_REV 360      // Number of encoder (rising) pulses every time the wheel turns completely 
+#define CM_TO_TRAVEL 50      // How far in cm for the robot to travel 
+#define TURN90DEGREE 10.9956 // cm to make a 90 degree turn
+#define WHEELSPEED 15        // Default raw pwm speed for motor.
+
+// The distance the wheel turns per revolution is equal to the diameter * PI.
+// The distance the wheel turns per encoder pulse is equal to the above divided
+// by the number of pulses per revolution.
+ 
+float distanceTraveled(float wheel_diam, uint16_t cnt_per_rev, uint8_t current_cnt) {
+  float temp = (wheel_diam * PI * current_cnt) / cnt_per_rev;
+  return temp;
+}
+
+
+uint32_t countForDistance(float wheel_diam, uint16_t cnt_per_rev, float distance) {
+  float temp = (wheel_diam * PI) / cnt_per_rev;
+  temp = distance / temp;
+  return int(temp);
+}
+
+//============================================================================
+// The setup() funtion runs one time at the beginning of the Energia program 
+//============================================================================
+void setup() {
+  Serial.begin(115200);
+  setupRSLK();                 // Set up all of the pins & functions needed to  
+                               //   be used by the TI bot
+  setupWaitBtn(LP_LEFT_BTN);   // Left button on Launchpad 
+  setupLed(RED_LED);           // Red LED of the RGB LED 
+}
+
+//============================================================================
+// The loop() function runs after the setup() function completes in an 
+// Energia program and will continue to run in a repeating loop until the 
+// LaunchPad is reset or powered off 
+//============================================================================
+void loop() {
+  uint16_t totalCount = 0; // Total amount of encoder pulses received
+  uint16_t i = 0; //loop counter variable
+
+  // Amount of encoder pulses needed to achieve distance 
+  uint16_t straight = countForDistance(WHEEL_DIAMETER, CNT_PER_REV, CM_TO_TRAVEL);
+  uint16_t turn = countForDistance(WHEEL_DIAMETER, CNT_PER_REV, TURN90DEGREE);
+  String btnMsg = "Expected count: ";
+  btnMsg += straight;
+
+  // Wait until button is pressed to start robot 
+  btnMsg += "\nPush left button on Launchpad to start demo.\n";
+   
+  waitBtnPressed(LP_LEFT_BTN,btnMsg,RED_LED);          // Wait until button is pressed to start robot
+  delay(2000);
+
+  for(i=0; i<4; i++) {                                 // This will make the bot travel in a square
+
+     // === DRIVE Straight ==========================
+     resetLeftEncoderCnt();  resetRightEncoderCnt();   // Set the encoder pulses count back to zero 
+     setMotorDirection(BOTH_MOTORS,MOTOR_DIR_FORWARD); // Cause the robot to drive forward 
+     enableMotor(BOTH_MOTORS);                         // "Turn on" the motor 
+     setMotorSpeed(BOTH_MOTORS,WHEELSPEED);            // Set motor speed 
+     while(totalCount < straight) {                    // Drive motor until it has received the 
+        totalCount = getEncoderLeftCnt();              //    correct number of pulses to travel
+        Serial.println(totalCount);                    //    straight for the desired distance
+     }
+     disableMotor(BOTH_MOTORS);                        // Halt motors 
+     totalCount=0;                                     // reset variable used to read encoder pulses
+     delay(1000);
+     //==============================================
+
+     // === DRIVE 90 degree turn CCW ================
+     resetLeftEncoderCnt();  resetRightEncoderCnt();    // Set the encoder pulses count back to zero 
+     setMotorDirection(RIGHT_MOTOR,MOTOR_DIR_FORWARD);  // Cause the robot to drive 90 degrees CCW 
+     setMotorDirection(LEFT_MOTOR,MOTOR_DIR_BACKWARD);  //   by setting the L motor and R motor CW
+     enableMotor(BOTH_MOTORS);                          // "Turn on" the motor 
+     setMotorSpeed(BOTH_MOTORS,WHEELSPEED);             // Set motor speed 
+     while(totalCount < turn) {                         // Drive motor until it has received the 
+        totalCount = getEncoderLeftCnt();               //    correct number of pulses to travel
+        Serial.println(totalCount);                     //    CCW for the desired distance
+     }
+     disableMotor(BOTH_MOTORS);                         // Halt motors 
+     totalCount=0;                                      // reset variable used to read encoder pulses
+     delay(1000);
+     //==============================================
+     
+  }  //end of for loop
+}  //end of loop function
