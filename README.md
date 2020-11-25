@@ -13,7 +13,7 @@ This class challenged me to design computer code for a [RSLK](https://university
 
 Videos and code of each task is in each folder's PDF Report. They also have been embedded here as a shortcut.
 
-**Note that the labs are listed in reverse order so the more difficult labs are at the top. **
+**Note that the labs are listed in reverse order so the more difficult labs are at the top.**
 
 ## Videos
 ### Lab 10
